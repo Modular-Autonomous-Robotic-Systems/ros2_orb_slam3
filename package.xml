@@ -30,6 +30,8 @@
   <build_depend>octomap</build_depend>
   <build_depend>octomap_ros</build_depend>
   <build_depend>octomap_msgs</build_depend>
+  <build_depend>rclcpp_lifecycle</build_depend>
+  <build_depend>lifecyle_msgs</build_depend>
 
   <!-- As suggested by the official tutorial, add your custom message interfaces as follows -->
   <depend>custom_interfaces</depend>
@@ -54,6 +56,8 @@
   <exec_depend>octomap</exec_depend>
   <exec_depend>octomap_ros</exec_depend>
   <exec_depend>octomap_msgs</exec_depend>
+  <exec_depend>rclcpp_lifecycle</exec_depend>
+  <exec_depend>lifecyle_msgs</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

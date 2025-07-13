@@ -522,27 +522,27 @@ void System::Shutdown()
 
     mpLocalMapper->RequestFinish();
     mpLoopCloser->RequestFinish();
-    /*if(mpViewer)
+    if(mpViewer)
     {
         mpViewer->RequestFinish();
         while(!mpViewer->isFinished())
             usleep(5000);
-    }*/
+    }
 
     // Wait until all thread have effectively stopped
-    /*while(!mpLocalMapper->isFinished() || !mpLoopCloser->isFinished() || mpLoopCloser->isRunningGBA())
+    while(!mpLocalMapper->isFinished() || !mpLoopCloser->isFinished() || mpLoopCloser->isRunningGBA())
     {
         if(!mpLocalMapper->isFinished())
-            cout << "mpLocalMapper is not finished" << endl;*/
-        /*if(!mpLoopCloser->isFinished())
+            cout << "mpLocalMapper is not finished" << endl;
+        if(!mpLoopCloser->isFinished())
             cout << "mpLoopCloser is not finished" << endl;
         if(mpLoopCloser->isRunningGBA()){
             cout << "mpLoopCloser is running GBA" << endl;
             cout << "break anyway..." << endl;
             break;
-        }*/
-        /*usleep(5000);
-    }*/
+        }
+        usleep(5000);
+    }
 
     if(!mStrSaveAtlasToFile.empty())
     {
@@ -550,14 +550,9 @@ void System::Shutdown()
         SaveAtlas(FileType::BINARY_FILE);
     }
 
-    /*if(mpViewer)
-        pangolin::BindToContext("ORB-SLAM2: Map Viewer");*/
-
 #ifdef REGISTER_TIMES
     mpTracker->PrintTimeStats();
 #endif
-
-
 }
 
 bool System::isShutDown() {
@@ -1640,7 +1635,9 @@ void System::FrameMapPointUpdateCallback(std::set<MapPoint*> &mapPoints, const S
 }
 
 void System::SetFrameMapPointUpdateCallback(std::function<void(std::vector<MapPoint*>&, const Sophus::SE3<float>&)> frameUpdateCallback){
-	mpOctoMapBuilder->SetFrameMapPointUpdateCallback(frameUpdateCallback);
+	if(mpOctoMapBuilder){
+		mpOctoMapBuilder->SetFrameMapPointUpdateCallback(frameUpdateCallback);
+	}
 }
 
 void System::GlobalMPAndKFPosesCallback(std::vector<std::pair<std::vector<MapPoint*>&, const Sophus::SE3<float>&>> &globalMPAndKFPoses){

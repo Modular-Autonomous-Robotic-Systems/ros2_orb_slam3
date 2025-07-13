@@ -43,10 +43,13 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(Yaml-cpp REQUIRED)
-find_package(MORB_SLAM REQUIRED COMPONENTS MORB_SLAM DBoW2 g2o sophus)
+# find_package(MORB_SLAM REQUIRED COMPONENTS MORB_SLAM DBoW2 g2o sophus)
 find_package(octomap REQUIRED)
 find_package(octomap_ros REQUIRED)
 find_package(octomap_msgs REQUIRED)
+find_package(lifecycle_msgs REQUIRED)
+find_package(rclcpp_lifecycle REQUIRED)
+find_package(rosbag2_cpp REQUIRED)
 
 # Header file locations [C++ node]
 include_directories(
@@ -80,6 +83,8 @@ set(THIS_PACKAGE_INCLUDE_DEPENDS
   tf2_ros
   tf2_geometry_msgs
   geometry_msgs
+  rclcpp_lifecycle
+  lifecycle_msgs
 )
 
 #* ORB SLAM3 as a shared library
@@ -144,7 +149,7 @@ target_link_libraries(orb_slam3_lib
   ${PROJECT_SOURCE_DIR}/orb_slam3/Thirdparty/g2o/lib/libg2o.so
   -lboost_system
   -lboost_serialization
-  -lcrypto 
+  -lcrypto
 )
 
 
@@ -175,36 +180,36 @@ target_include_directories(
 	PUBLIC ${PROJECT_SOURCE_DIR}/orb_slam3/Thirdparty
 	PUBLIC ${PROJECT_SOURCE_DIR}/orb_slam3/Thirdparty/Sophus
 )
-add_executable(morbslam_mono_node
-	src/node.cpp
-	src/slam.cpp
-	src/monocular.cpp
-	src/morbslam/monocular.cpp
-	src/monocular_driver.cpp
-)
+# add_executable(morbslam_mono_node
+# 	src/node.cpp
+# 	src/slam.cpp
+# 	src/monocular.cpp
+# 	src/morbslam/monocular.cpp
+# 	src/monocular_driver.cpp
+# )
 # target_include_directories()
 set(USE_MORBLAM 1)
-target_compile_definitions(morbslam_mono_node PRIVATE USE_MORBSLAM=${USE_MORBSLAM})
+# target_compile_definitions(morbslam_mono_node PRIVATE USE_MORBSLAM=${USE_MORBSLAM})
 
 ament_target_dependencies(orbslam3_mono_node
   PUBLIC ${THIS_PACKAGE_INCLUDE_DEPENDS}
 )
-ament_target_dependencies(morbslam_mono_node
-  PUBLIC ${THIS_PACKAGE_INCLUDE_DEPENDS}
-)
+# ament_target_dependencies(morbslam_mono_node
+#   PUBLIC ${THIS_PACKAGE_INCLUDE_DEPENDS}
+# )
 
 target_link_libraries(orbslam3_mono_node 
 	PUBLIC orb_slam3_lib
   	PUBLIC ${YAMLCPP_LIBRARY}
 	PUBLIC yaml-cpp) # Link a node with the internal shared library
-target_link_libraries(morbslam_mono_node
-	PUBLIC MORB_SLAM::MORB_SLAM
-	PUBLIC MORB_SLAM::DBoW2
-	PUBLIC MORB_SLAM::g2o
-	PUBLIC MORB_SLAM::sophus
-  	PUBLIC ${YAMLCPP_LIBRARY}
-	PUBLIC yaml-cpp
-	PUBLIC ${OCTOMAP_LIBRARIES})
+# target_link_libraries(morbslam_mono_node
+# 	PUBLIC MORB_SLAM::MORB_SLAM
+# 	PUBLIC MORB_SLAM::DBoW2
+# 	PUBLIC MORB_SLAM::g2o
+# 	PUBLIC MORB_SLAM::sophus
+#   	PUBLIC ${YAMLCPP_LIBRARY}
+# 	PUBLIC yaml-cpp
+# 	PUBLIC ${OCTOMAP_LIBRARIES})
 
 # Install all the header files in package/package/include
 install (DIRECTORY include/ 
@@ -217,6 +222,11 @@ install(TARGETS orbslam3_mono_node orb_slam3_lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
   INCLUDES DESTINATION include/${PROJECT_NAME}
+)
+
+install(DIRECTORY
+	launch
+	DESTINATION share/${PROJECT_NAME}/
 )
 
 # Tell downstream packages where to find the headers

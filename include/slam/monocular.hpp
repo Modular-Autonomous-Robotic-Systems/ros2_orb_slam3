@@ -7,16 +7,49 @@
 #include "slam/morbslam/monocular.hpp"
 #endif
 
-class MonocularSlamNode : public SlamNode
+class VisualSlamNode : public SlamNode
 {
 	public:
-		MonocularSlamNode();
-		~MonocularSlamNode();
+		VisualSlamNode();
+		~VisualSlamNode();
+		/**
+		 * @brief Lifecycle callback for the 'configuring' transition.
+		 * @param previous_state The previous lifecycle state.
+		 * @return CallbackReturn::SUCCESS on successful configuration.
+		 * @return CallbackReturn::FAILURE on configuration failure.
+		 */
+		CallbackReturn on_configure(const rclcpp_lifecycle::State & previous_state);
+
+		/**
+		 * @brief Lifecycle callback for the 'activating' transition.
+		 * @param previous_state The previous lifecycle state.
+		 * @return CallbackReturn::SUCCESS on successful activation.
+		 * @return CallbackReturn::FAILURE on activation failure.
+		 */
+		CallbackReturn on_activate(const rclcpp_lifecycle::State & previous_state);
+
+		/**
+		 * @brief Lifecycle callback for the 'deactivating' transition.
+		 * @param previous_state The previous lifecycle state.
+		 * @return CallbackReturn::SUCCESS on successful deactivation.
+		 * @return CallbackReturn::FAILURE on deactivation failure.
+		 */
+		CallbackReturn on_deactivate(const rclcpp_lifecycle::State & previous_state);
+
+		/**
+		 * @brief Lifecycle callback for the 'cleaning up' transition.
+		 * @param previous_state The previous lifecycle state.
+		 * @return CallbackReturn::SUCCESS on successful cleanup.
+		 * @return CallbackReturn::FAILURE on cleanup failure.
+		 */
+		CallbackReturn on_cleanup(const rclcpp_lifecycle::State & previous_state);
+
+	protected:
+		std::string mpCameraTopicName;
+		std::string mpVocabFilePath;
+
 	private:
 		// Node Configurations
-		std::string mpCameraTopicName;
-		std::string mpSlamSettingsFilePath;
-		std::string mpVocabFilePath;
 		Frame mpCurrentFrame;
 		std::unique_ptr<Slam> mpSlam = nullptr;
 		Eigen::Matrix3d mpOrbToROSTransform;
@@ -37,9 +70,6 @@ class MonocularSlamNode : public SlamNode
 		rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr mpSlamShutdownService;
 		// Callbacks and Methods
 		void Update();
-		void InitialiseSlamNode(
-				std::shared_ptr<custom_interfaces::srv::StartupSlam::Request> request,
-				std::shared_ptr<custom_interfaces::srv::StartupSlam::Response> response);
 		void GrabImage(const sensor_msgs::msg::Image::SharedPtr msg);
 		void PublishFrame();
 #ifdef USE_ORBSLAM3

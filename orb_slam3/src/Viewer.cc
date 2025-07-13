@@ -384,6 +384,9 @@ void Viewer::Run()
     }
 
     SetFinish();
+	// cv::destroyWindow("ORB-SLAM3: Current Frame");
+	cv::destroyAllWindows();
+
 }
 
 void Viewer::RequestFinish()
