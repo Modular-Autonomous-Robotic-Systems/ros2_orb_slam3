@@ -11,34 +11,29 @@
 #include "tf2_geometry_msgs/tf2_geometry_msgs.h"
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include "custom_interfaces/msg/point_cloud3.hpp"
+#include <rclcpp_lifecycle/lifecycle_node.hpp>
 
 using ImageMsg = sensor_msgs::msg::Image;
 using MarkerMsg = visualization_msgs::msg::Marker;
 using PointMsg = geometry_msgs::msg::Point;
 using MapMsg = custom_interfaces::msg::PointCloud3;
+using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 
 bool readYAMLFile(std::string &yamlPath, YAML::Node &output);
 
-class SlamNode : public rclcpp::Node{
+class SlamNode : public rclcpp_lifecycle::LifecycleNode{
 	public:
 		SlamNode(std::string nodeName);
 		Sophus::SE3f mpTwc;
 	protected:
 		void Update();
 		std::unique_ptr<tf2_ros::TransformBroadcaster> mpTfBroadcaster;
-		void InitialiseSlamNode(
-				std::shared_ptr<custom_interfaces::srv::StartupSlam::Request> request,
-				std::shared_ptr<custom_interfaces::srv::StartupSlam::Response> response);
-		std::string mpCameraTopicName = "";
-		std::string mpSlamConfigFilePath = "";
+		std::string mpSettingsFilePath = "";
 	private:
 
 		// Publication Callbacks
 		void PublishPositionAsTransform(Sophus::SE3f &Tcw);
 		void PublishState(int trackingState);
-
-		// Startup/Shutdown Services
-		rclcpp::Service<custom_interfaces::srv::StartupSlam>::SharedPtr mpSlamStartupService;
 };
 
 #endif

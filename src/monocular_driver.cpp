@@ -5,11 +5,11 @@ int main(int argc, char **argv){
     rclcpp::init(argc, argv); // Always the first line, initialize this node
     
     //* Declare a node object
-    auto node = std::make_shared<MonocularSlamNode>(); 
+    auto node = std::make_shared<VisualSlamNode>(); 
     
     // rclcpp::Rate rate(20); // Set the desired update rate (e.g., 10 Hz)
 
-    rclcpp::spin(node); // Blocking node
+    rclcpp::spin(node->get_node_base_interface()); // Blocking node
     rclcpp::shutdown();
     return 0;
 }

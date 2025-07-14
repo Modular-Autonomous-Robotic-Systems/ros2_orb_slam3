@@ -59,12 +59,9 @@ enum eSlamType{
 class Slam{
 	public:
 		Slam(rclcpp::Logger logger);
-		virtual void InitialiseSlam(
-				std::shared_ptr<custom_interfaces::srv::StartupSlam::Request> request,
-				std::shared_ptr<custom_interfaces::srv::StartupSlam::Response> response) = 0;
-		virtual void Shutdown() = 0;
 		virtual cv::Mat GetCurrentFrame() = 0;
 		virtual void TrackMonocular(Frame &frame, Sophus::SE3f &tcw) = 0;
+		virtual void Shutdown() = 0;
 #ifdef USE_ORBSLAM3
 		virtual void SetFrameMapPointUpdateCallback(std::function<void(std::vector<ORB_SLAM3::MapPoint*>&, const Sophus::SE3<float>&)> callback) = 0;
 #endif

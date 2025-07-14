@@ -12,14 +12,12 @@ geometry_msgs::msg::Transform sophusToTransformMsg(Sophus::SE3f& se3) {
   return msg;
 }
 
-SlamNode::SlamNode(std::string nodeName)
-:	rclcpp::Node(nodeName){
+SlamNode::SlamNode(std::string nodeName) : rclcpp_lifecycle::LifecycleNode(nodeName){
 	RCLCPP_INFO(this->get_logger(), "Initialising Slam Node");
-}
-
-void SlamNode::InitialiseSlamNode(std::shared_ptr<StartupSlam::Request> request,
-		std::shared_ptr<StartupSlam::Response> response){
-	RCLCPP_INFO(this->get_logger(), "Initialising Base Node");
+	rcl_interfaces::msg::ParameterDescriptor settings_file_path_desc;
+	settings_file_path_desc.description = "Path to settings file for underlying SLAM algorithm";
+	settings_file_path_desc.type = 4;
+	this->declare_parameter<std::string>("settings_file_path", "/ws/ros_ws/src/slam/orb_slam3/config/Monocular/sitl.yaml", settings_file_path_desc);
 }
 
 void SlamNode::Update(){

@@ -1,39 +1,34 @@
 #include "slam/monocular.hpp"
 
-MonocularSlamNode::MonocularSlamNode() : SlamNode("orbslam3_mono_node"){
-	RCLCPP_INFO(this->get_logger(), "Creating SLAM Object in Mono Slam Node");
-#ifdef USE_ORBSLAM3
-	mpSlam = std::unique_ptr<Slam>(new MonoORBSLAM3(this->get_logger()));
-	RCLCPP_INFO(this->get_logger(), "Created SLAM Object for ORBSLAM3 in Mono Slam Node");
-#endif
-#ifdef USE_MORBSLAM
-	mpSlam = std::unique_ptr<Slam>(new MonoMORBSLAM(this->get_logger()));
-	RCLCPP_INFO(this->get_logger(), "Created SLAM Object for MORBSLAM in Mono Slam Node");
-#endif
-	mpSlamStartupService = this->create_service<StartupSlam>("~/start_slam", std::bind(&MonocularSlamNode::InitialiseSlamNode, this, std::placeholders::_1, std::placeholders::_2));
+VisualSlamNode::VisualSlamNode() : SlamNode("orbslam3_mono_node"){
+	rcl_interfaces::msg::ParameterDescriptor camera_topic_name_desc;
+	camera_topic_name_desc.description = "Camera Topic Name";
+	camera_topic_name_desc.type = 4;
+	this->declare_parameter<std::string>("camera_topic_name", "/camera", camera_topic_name_desc);
+
+	rcl_interfaces::msg::ParameterDescriptor vocab_file_path_desc;
+	vocab_file_path_desc.description = "Path to ORBSLAM3 Vocabulary File";
+	vocab_file_path_desc.type = 4;
+	this->declare_parameter<std::string>("vocab_file_path", "/ws/ros_ws/src/slam/orb_slam3/Vocabulary/ORBvoc.txt.bin", vocab_file_path_desc);
+	
 	mpOrbToROSTransform <<  1, 0, 0, 0, 0, -1, 0, 1, 0;
-	mpTfBroadcaster = std::make_unique<tf2_ros::TransformBroadcaster>(tf2_ros::TransformBroadcaster(this)); 
 }
 
-void MonocularSlamNode::InitialiseSlamNode(std::shared_ptr<StartupSlam::Request> request,
-		std::shared_ptr<StartupSlam::Response> response){
-	SlamNode::InitialiseSlamNode(request, response);
-	// TODO call parent class method of same name here
-	mpCameraTopicName = request->camera_topic;
-	mpSlamConfigFilePath = request->config_file_path;
-	RCLCPP_INFO(this->get_logger(), "Got Camera topic name: %s", mpCameraTopicName.c_str());
-	RCLCPP_INFO(this->get_logger(), "Got Config file path: %s", mpSlamConfigFilePath.c_str());	
-	RCLCPP_INFO(this->get_logger(), "Creating Frame Subscription for topic: %s perform to visual odometry", mpCameraTopicName.c_str());
-	mpFrameSubscriber = this->create_subscription<ImageMsg>(
-			mpCameraTopicName,
-			10,
-			std::bind(&MonocularSlamNode::GrabImage, this, std::placeholders::_1));
-	mpAnnotatedFramePublisher = this->create_publisher<ImageMsg>("~/annotated_frame", 10);
-	mpMapPointPublisher = this->create_publisher<MapMsg>("~/map_points", 10);
-	// mpMapPublisher = this->create_publisher<MarkerMsg>("~/slam_map");
-	mpSlam->InitialiseSlam(request, response);
+CallbackReturn VisualSlamNode::on_configure(const rclcpp_lifecycle::State & previous_state){
+	mpSettingsFilePath = this->get_parameter("settings_file_path").as_string();
+	RCLCPP_INFO(this->get_logger(), "Settings File Path: %s", mpSettingsFilePath.c_str());
+	mpCameraTopicName = this->get_parameter("camera_topic_name").as_string();
+	mpVocabFilePath = this->get_parameter("vocab_file_path").as_string();
+	RCLCPP_INFO(this->get_logger(), "Camera Topic Name: %s", mpCameraTopicName.c_str());
+	RCLCPP_INFO(this->get_logger(), "Vocabulary File Path: %s", mpVocabFilePath.c_str());
+	return CallbackReturn::SUCCESS;
+}
 
+CallbackReturn VisualSlamNode::on_activate(const rclcpp_lifecycle::State & previous_state){
+	RCLCPP_INFO(this->get_logger(), "Creating SLAM Object in Mono Slam Node");
 #ifdef USE_ORBSLAM3
+	mpSlam = std::unique_ptr<Slam>(new MonoORBSLAM3(this->get_logger(), mpSettingsFilePath, mpVocabFilePath, "monocular-only"));
+	RCLCPP_INFO(this->get_logger(), "Created SLAM Object for ORBSLAM3 in Mono Slam Node");
 	std::function<void(std::vector<ORB_SLAM3::MapPoint*>&, const Sophus::SE3<float>&)> cb = [this](std::vector<ORB_SLAM3::MapPoint*> &mapPoints, const Sophus::SE3<float> &tcw){
 		PublishMapPointsCallback(mapPoints, tcw);
 	};
@@ -41,35 +36,67 @@ void MonocularSlamNode::InitialiseSlamNode(std::shared_ptr<StartupSlam::Request>
 	mpState = ORB_SLAM3::Tracking::SYSTEM_NOT_READY;
 #endif
 #ifdef USE_MORBSLAM
+	mpSlam = std::unique_ptr<Slam>(new MonoMORBSLAM(this->get_logger()));
 	mpState = MORB_SLAM::TrackingState::SYSTEM_NOT_READY;
+	RCLCPP_INFO(this->get_logger(), "Created SLAM Object for MORBSLAM in Mono Slam Node");
 #endif
-	if(!response->success){
-		response->success = true;
-		response->message = "Successfully created SLAM object and required subscribers";
-		RCLCPP_INFO(this->get_logger(), "ORBSLAM3 initialisation complete");
-	}
-	else{
-		RCLCPP_ERROR(this->get_logger(), "ORBSLAM3 initialisation failed");
-	}
 
-	// InitializeMarkersPublisher(mpSlamSettingsFilePath);
+	mpTfBroadcaster = std::make_unique<tf2_ros::TransformBroadcaster>(tf2_ros::TransformBroadcaster(this)); 
+
+	RCLCPP_INFO(this->get_logger(), "Got Camera topic name: %s", mpCameraTopicName.c_str());
+	RCLCPP_INFO(this->get_logger(), "Got Config file path: %s", mpSettingsFilePath.c_str());	
+	RCLCPP_INFO(this->get_logger(), "Creating Frame Subscription for topic: %s perform to visual odometry", mpCameraTopicName.c_str());
+
+	mpFrameSubscriber = this->create_subscription<ImageMsg>(
+			mpCameraTopicName,
+			10,
+			std::bind(&VisualSlamNode::GrabImage, this, std::placeholders::_1));
+	mpAnnotatedFramePublisher = this->create_publisher<ImageMsg>("~/annotated_frame", 10);
+	mpMapPointPublisher = this->create_publisher<MapMsg>("~/map_points", 10);
+	// mpMapPublisher = this->create_publisher<MarkerMsg>("~/slam_map");
+
+	RCLCPP_INFO(this->get_logger(), "ORBSLAM3 initialisation complete");
+	return CallbackReturn::SUCCESS;
 }
 
+CallbackReturn VisualSlamNode::on_deactivate(const rclcpp_lifecycle::State& previous_state){
+	if (mpMapPointPublisher){
+		mpMapPointPublisher.reset();
+	}
+	if(mpAnnotatedFramePublisher){
+		mpAnnotatedFramePublisher.reset();
+	}
+	if(mpTfBroadcaster){
+		mpTfBroadcaster.reset();
+	}
+	if(mpFrameSubscriber){
+		mpFrameSubscriber.reset();
+	}
+	if(mpSlam){
+		mpSlam->Shutdown();
+		mpSlam.reset();
+	}
+	return CallbackReturn::SUCCESS;
+}
 
-void MonocularSlamNode::Update(){
+CallbackReturn VisualSlamNode::on_cleanup(const rclcpp_lifecycle::State& previous_state){
+	return CallbackReturn::SUCCESS;
+}
+
+void VisualSlamNode::Update(){
 	SlamNode::Update();
 	PublishFrame();
 }
 
 
-MonocularSlamNode::~MonocularSlamNode()
+VisualSlamNode::~VisualSlamNode()
 {
     // Stop all threads
-    mpSlam->Shutdown();
+	mpSlam.reset();
 }
 
 
-void MonocularSlamNode::GrabImage(const ImageMsg::SharedPtr msg)
+void VisualSlamNode::GrabImage(const ImageMsg::SharedPtr msg)
 {
 	RCLCPP_DEBUG(this->get_logger(), "Received Image Message for Tracking");
 
@@ -89,20 +116,23 @@ void MonocularSlamNode::GrabImage(const ImageMsg::SharedPtr msg)
 	int nsec = msg->header.stamp.nanosec;
 	long timestamp = sec * 1e9 + nsec;
    	mpCurrentFrame = Frame(std::make_shared<cv::Mat>(m_cvImPtr->image), timestamp);
+	cv::Mat img = mpCurrentFrame.getImage();
 	Sophus::SE3f tcw;
-	mpSlam->TrackMonocular(mpCurrentFrame, tcw);
-	// The output of ORBSLAM3 is the transformation that can convert points
-	// from world frame to camera frame. Thus, Tcw * Xw would be equivalent to
-	// Xw to Xc. To get the position of the camera with respect to slam origin,
-	// the transformation needs to be inverted to obtain camera position in 
-	// world reference
-	// The following link documents an issue related to this in ORBSLAM2 repo
-	// https://github.com/raulmur/ORB_SLAM2/issues/226
-	// One may also refer to the following link to check the implementation of
-	// of inverse for Sophus::SE3f 
-	mpTwc = tcw.inverse();
-	// Publishes all data common to all SLAM algorithms
-	Update();
+	if(!img.empty()){
+		mpSlam->TrackMonocular(mpCurrentFrame, tcw);
+		// The output of ORBSLAM3 is the transformation that can convert points
+		// from world frame to camera frame. Thus, Tcw * Xw would be equivalent to
+		// Xw to Xc. To get the position of the camera with respect to slam origin,
+		// the transformation needs to be inverted to obtain camera position in 
+		// world reference
+		// The following link documents an issue related to this in ORBSLAM2 repo
+		// https://github.com/raulmur/ORB_SLAM2/issues/226
+		// One may also refer to the following link to check the implementation of
+		// of inverse for Sophus::SE3f 
+		mpTwc = tcw.inverse();
+		// Publishes all data common to all SLAM algorithms
+		Update();
+	}
     
     // UpdateSLAMState();
     // UpdateMapState();
@@ -112,7 +142,7 @@ void MonocularSlamNode::GrabImage(const ImageMsg::SharedPtr msg)
     // PublishKeyFrames();
 }
 
-void MonocularSlamNode::PublishFrame()
+void VisualSlamNode::PublishFrame()
 {
 
 	cv::Mat drawnFrame = mpSlam->GetCurrentFrame();
@@ -141,7 +171,7 @@ void MonocularSlamNode::PublishFrame()
 }
 
 #ifdef USE_ORBSLAM3
-void MonocularSlamNode::PublishMapPointsCallback(std::vector<ORB_SLAM3::MapPoint*> &mapPoints, const Sophus::SE3<float> &tcw){
+void VisualSlamNode::PublishMapPointsCallback(std::vector<ORB_SLAM3::MapPoint*> &mapPoints, const Sophus::SE3<float> &tcw){
 	if(mapPoints.size() == 0){
 		RCLCPP_ERROR(this->get_logger(), "No Map Points to add to octomap");
 		return;
@@ -154,7 +184,7 @@ void MonocularSlamNode::PublishMapPointsCallback(std::vector<ORB_SLAM3::MapPoint
 	mpMapPointPublisher->publish(std::move(msg));
 }
 
-void MonocularSlamNode::MapPointsToPointCloud(std::vector<ORB_SLAM3::MapPoint*> &mapPoints, const Sophus::SE3<float> &tcw, sensor_msgs::msg::PointCloud2 &cloud){
+void VisualSlamNode::MapPointsToPointCloud(std::vector<ORB_SLAM3::MapPoint*> &mapPoints, const Sophus::SE3<float> &tcw, sensor_msgs::msg::PointCloud2 &cloud){
 	// sensor_msgs::PointCloud2 cloud;
 
     const int num_channels = 3; // x y z
@@ -212,7 +242,7 @@ void MonocularSlamNode::MapPointsToPointCloud(std::vector<ORB_SLAM3::MapPoint*> 
     // return cloud;
 }
 
-void MonocularSlamNode::SophusToGeometryMsgTransform(const Sophus::SE3<float>& se3, geometry_msgs::msg::Transform &pose) {
+void VisualSlamNode::SophusToGeometryMsgTransform(const Sophus::SE3<float>& se3, geometry_msgs::msg::Transform &pose) {
     // Extract translation
     pose.translation.x = se3.translation().x();
     pose.translation.y = se3.translation().y();
