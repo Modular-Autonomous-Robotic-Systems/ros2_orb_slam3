@@ -17,9 +17,9 @@ MonoORBSLAM3::MonoORBSLAM3(rclcpp::Logger logger, std::string settingsFilePath, 
 	ORB_SLAM3::System::eSensor cameraType;
 	YAML::Node slamConfig;
 	if(setupCameraType == "monocular-only"){
-		cameraType = ORB_SLAM3::System::eSensor::MONOCULAR;
+		mpCameraType = ORB_SLAM3::System::eSensor::MONOCULAR;
 	}
-	mpORBSlam3 = std::make_unique<ORB_SLAM3::System>(vocabFilePath, settingsFilePath, cameraType, true);
+	mpORBSlam3 = std::make_unique<ORB_SLAM3::System>(vocabFilePath, settingsFilePath, mpCameraType, true);
 }
 
 void MonoORBSLAM3::TrackMonocular(Frame &frame, Sophus::SE3f &tcw){
