@@ -1,0 +1,3 @@
+[submodule "ext/basalt"]
+	path = ext/basalt
+	url = git@github.com:Modular-Autonomous-Robotic-Systems/basalt.git

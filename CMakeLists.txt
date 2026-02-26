@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.8)
 project(slam)
 
+set(SLAM_TYPE "BASALT" CACHE STRING "Type of SLAM system to build (ORBSLAM3 or BASALT)")
+set_property(CACHE SLAM_TYPE PROPERTY STRINGS "ORBSLAM3" "BASALT")
+
 # Make sure to set this path before building the  
 set(ENV{PYTHONPATH} "/opt/ros/humble/lib/python3.10/site-packages/") # Must be set to match your installation
 
@@ -57,7 +60,6 @@ include_directories(
 	$<INSTALL_INTERFACE:include>
 	include 
 	${EIGEN3_INCLUDE_DIRS}
-	${Pangolin_INCLUDE_DIRS}
 	${OpenCV_INCLUDE_DIRS}
 	${YAMLCPP_INCLUDE_DIR}
 	${OCTOMAP_INCLUDE_DIRS})
@@ -89,139 +91,103 @@ set(THIS_PACKAGE_INCLUDE_DEPENDS
 
 #* ORB SLAM3 as a shared library
 # Whenever you add a new .h, .hpp or .cc, .cpp file in the ros2_orb_slam3/orb_slam3/include and os2_orb_slam3/orb_slam3/src directories, make sure to add them here as shown below
-add_library(orb_slam3_lib SHARED
-  orb_slam3/src/System.cc
-  orb_slam3/src/Tracking.cc
-  orb_slam3/src/LocalMapping.cc
-  orb_slam3/src/LoopClosing.cc
-  orb_slam3/src/ORBextractor.cc
-  orb_slam3/src/ORBmatcher.cc
-  orb_slam3/src/OctoMapBuilder.cpp
-  orb_slam3/src/FrameDrawer.cc
-  orb_slam3/src/Converter.cc
-  orb_slam3/src/MapPoint.cc
-  orb_slam3/src/KeyFrame.cc
-  orb_slam3/src/Atlas.cc
-  orb_slam3/src/Map.cc
-  orb_slam3/src/MapDrawer.cc
-  orb_slam3/src/Optimizer.cc
-  orb_slam3/src/Frame.cc
-  orb_slam3/src/KeyFrameDatabase.cc
-  orb_slam3/src/Sim3Solver.cc
-  orb_slam3/src/Viewer.cc
-  orb_slam3/src/ImuTypes.cc
-  orb_slam3/src/G2oTypes.cc
-  orb_slam3/src/CameraModels/Pinhole.cpp
-  orb_slam3/src/CameraModels/KannalaBrandt8.cpp
-  orb_slam3/src/OptimizableTypes.cpp
-  orb_slam3/src/MLPnPsolver.cpp
-  orb_slam3/src/GeometricTools.cc
-  orb_slam3/src/TwoViewReconstruction.cc
-  orb_slam3/src/Config.cc
-  orb_slam3/src/Settings.cc
-)
 
-# ORB-SLAM3 includes [VSLAM library]
-target_include_directories(
-	orb_slam3_lib
-	PUBLIC ${PROJECT_SOURCE_DIR}
-	PUBLIC ${PROJECT_SOURCE_DIR}/orb_slam3
-	PUBLIC ${PROJECT_SOURCE_DIR}/orb_slam3/include
-	PUBLIC ${PROJECT_SOURCE_DIR}/orb_slam3/include/CameraModels
-	PUBLIC ${PROJECT_SOURCE_DIR}/orb_slam3/Thirdparty
-	PUBLIC ${PROJECT_SOURCE_DIR}/orb_slam3/Thirdparty/Sophus
-)
+if(SLAM_TYPE STREQUAL "ORBSLAM3")
+  add_subdirectory(orb_slam3)
 
+  # Installed targets handle DBoW2 and g2o now
 
-set_target_properties(orb_slam3_lib PROPERTIES VERSION "${orb_slam3_lib_VERSION}") # TODO need to findout why this is required
+  # Add executable
+  add_executable(orbslam3_mono_node
+  	src/node.cpp
+  	src/slam.cpp
+  	src/orbslam3/slam.cpp
+  	src/orbslam3/monocular.cpp
+  	src/orbslam3/monocular_driver.cpp
+  )
+  set(USE_ORBLAM3 1)
+  target_compile_definitions(orbslam3_mono_node PRIVATE USE_ORBSLAM3=${USE_ORBLAM3})
+  # target_include_directories for orbslam3_mono_node are inherited from orb_slam3_lib
+  # add_executable(morbslam_mono_node
+  # 	src/node.cpp
+  # 	src/slam.cpp
+  # 	src/orbslam3/slam.cpp
+  # 	src/morbslam/monocular.cpp
+  # 	src/orbslam3/monocular_driver.cpp
+  # )
+  # target_include_directories()
+  set(USE_MORBLAM 1)
+  # target_compile_definitions(morbslam_mono_node PRIVATE USE_MORBSLAM=${USE_MORBSLAM})
 
-# ament_target_dependencies(orb_slam3_lib
-#   ${THIS_PACKAGE_INCLUDE_DEPENDS}
-# )
+  ament_target_dependencies(orbslam3_mono_node
+    PUBLIC ${THIS_PACKAGE_INCLUDE_DEPENDS}
+  )
+  # ament_target_dependencies(morbslam_mono_node
+  #   PUBLIC ${THIS_PACKAGE_INCLUDE_DEPENDS}
+  # )
 
+  target_link_libraries(orbslam3_mono_node 
+  	PUBLIC orb_slam3_lib
+    	PUBLIC ${YAMLCPP_LIBRARY}
+  	PUBLIC yaml-cpp) # Link a node with the internal shared library
+  # target_link_libraries(morbslam_mono_node
+  # 	PUBLIC MORB_SLAM::MORB_SLAM
+  # 	PUBLIC MORB_SLAM::DBoW2
+  # 	PUBLIC MORB_SLAM::g2o
+  # 	PUBLIC MORB_SLAM::sophus
+  #   	PUBLIC ${YAMLCPP_LIBRARY}
+  # 	PUBLIC yaml-cpp
+  # 	PUBLIC ${OCTOMAP_LIBRARIES})
 
-# Link libraries
-target_link_libraries(orb_slam3_lib
-  ${OpenCV_LIBS}
-  ${EIGEN3_LIBS}
-  ${Pangolin_LIBRARIES}
-  ${PROJECT_SOURCE_DIR}/orb_slam3/Thirdparty/DBoW2/lib/libDBoW2.so
-  ${PROJECT_SOURCE_DIR}/orb_slam3/Thirdparty/g2o/lib/libg2o.so
-  -lboost_system
-  -lboost_serialization
-  -lcrypto
-)
+  # Install our node and library
+  install(TARGETS orbslam3_mono_node orb_slam3_lib DBoW2 g2o
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    RUNTIME DESTINATION lib/${PROJECT_NAME}
+    INCLUDES DESTINATION include/${PROJECT_NAME}
+  )
 
+  # Help downstream packages to find transitive dependencies
+  ament_export_dependencies(
+    orb_slam3_lib
+    ${THIS_PACKAGE_INCLUDE_DEPENDS}
+  )
+elseif(SLAM_TYPE STREQUAL "BASALT")
+  add_subdirectory(ext/basalt)
 
-# Find the .so files provided in ros2_orb_slam3/orb_slam3/Thirdparty projects
-set(DBoW2_PATH "${PROJECT_SOURCE_DIR}/orb_slam3/Thirdparty/DBoW2/lib/libDBoW2.so")
-set(g2o_PATH "${PROJECT_SOURCE_DIR}/orb_slam3/Thirdparty/g2o/lib/libg2o.so")
+  add_executable(basalt_slam_node
+    src/node.cpp
+    src/slam.cpp
+    src/basalt/slam.cpp
+    src/basalt/node.cpp
+    src/basalt/driver.cpp
+  )
 
-# Install .so files to the lib directory in the install space
-install(FILES ${DBoW2_PATH} DESTINATION lib)
-install(FILES ${g2o_PATH} DESTINATION lib)
+  ament_target_dependencies(basalt_slam_node
+    PUBLIC ${THIS_PACKAGE_INCLUDE_DEPENDS}
+  )
 
-# Add executable
-add_executable(orbslam3_mono_node
-	src/node.cpp
-	src/slam.cpp
-	src/monocular.cpp
-	src/orbslam3/monocular.cpp
-	src/monocular_driver.cpp
-)
-set(USE_ORBLAM3 1)
-target_compile_definitions(orbslam3_mono_node PRIVATE USE_ORBSLAM3=${USE_ORBLAM3})
-target_include_directories(
-	orbslam3_mono_node
-	PUBLIC ${PROJECT_SOURCE_DIR}
-	PUBLIC ${PROJECT_SOURCE_DIR}/orb_slam3
-	PUBLIC ${PROJECT_SOURCE_DIR}/orb_slam3/include
-	PUBLIC ${PROJECT_SOURCE_DIR}/orb_slam3/include/CameraModels
-	PUBLIC ${PROJECT_SOURCE_DIR}/orb_slam3/Thirdparty
-	PUBLIC ${PROJECT_SOURCE_DIR}/orb_slam3/Thirdparty/Sophus
-)
-# add_executable(morbslam_mono_node
-# 	src/node.cpp
-# 	src/slam.cpp
-# 	src/monocular.cpp
-# 	src/morbslam/monocular.cpp
-# 	src/monocular_driver.cpp
-# )
-# target_include_directories()
-set(USE_MORBLAM 1)
-# target_compile_definitions(morbslam_mono_node PRIVATE USE_MORBSLAM=${USE_MORBSLAM})
+  target_link_libraries(basalt_slam_node
+    PUBLIC basalt
+    PUBLIC ${YAMLCPP_LIBRARY}
+    PUBLIC yaml-cpp
+  )
 
-ament_target_dependencies(orbslam3_mono_node
-  PUBLIC ${THIS_PACKAGE_INCLUDE_DEPENDS}
-)
-# ament_target_dependencies(morbslam_mono_node
-#   PUBLIC ${THIS_PACKAGE_INCLUDE_DEPENDS}
-# )
+  install(TARGETS basalt_slam_node
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    RUNTIME DESTINATION lib/${PROJECT_NAME}
+    INCLUDES DESTINATION include/${PROJECT_NAME}
+  )
 
-target_link_libraries(orbslam3_mono_node 
-	PUBLIC orb_slam3_lib
-  	PUBLIC ${YAMLCPP_LIBRARY}
-	PUBLIC yaml-cpp) # Link a node with the internal shared library
-# target_link_libraries(morbslam_mono_node
-# 	PUBLIC MORB_SLAM::MORB_SLAM
-# 	PUBLIC MORB_SLAM::DBoW2
-# 	PUBLIC MORB_SLAM::g2o
-# 	PUBLIC MORB_SLAM::sophus
-#   	PUBLIC ${YAMLCPP_LIBRARY}
-# 	PUBLIC yaml-cpp
-# 	PUBLIC ${OCTOMAP_LIBRARIES})
+  ament_export_dependencies(
+    ${THIS_PACKAGE_INCLUDE_DEPENDS}
+  )
+endif()
 
 # Install all the header files in package/package/include
 install (DIRECTORY include/ 
         DESTINATION include
-)
-
-# Install our node and library
-install(TARGETS orbslam3_mono_node orb_slam3_lib
-  ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
-  RUNTIME DESTINATION lib/${PROJECT_NAME}
-  INCLUDES DESTINATION include/${PROJECT_NAME}
 )
 
 install(DIRECTORY
@@ -231,12 +197,6 @@ install(DIRECTORY
 
 # Tell downstream packages where to find the headers
 ament_export_include_directories(include)
-
-# Help downstream packages to find transitive dependencies
-ament_export_dependencies(
-  orb_slam3_lib
-  ${THIS_PACKAGE_INCLUDE_DEPENDS}
-)
 
 
 # Python node
