@@ -1,4 +1,4 @@
-set (dbow2_ROOR_DIR "${PROJECT_SOURCE_DIR}/orb_slam3/Thirdparty/DBoW2")
+set (dbow2_ROOR_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 
 set(HDRS_DBOW2
   ${dbow2_ROOR_DIR}/DBoW2/BowVector.h
