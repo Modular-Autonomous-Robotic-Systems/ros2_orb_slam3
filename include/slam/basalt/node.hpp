@@ -1,25 +1,30 @@
 #pragma once
 
-#include "slam/node.hpp"
 #include "slam/basalt/slam.h"
+#include "slam/node.hpp"
+#include <cv_bridge/cv_bridge.h>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
-#include <cv_bridge/cv_bridge.h>
 
 class BasaltSLAMNode : public SlamNode {
   public:
     BasaltSLAMNode();
     ~BasaltSLAMNode();
 
-    CallbackReturn on_configure(const rclcpp_lifecycle::State &previous_state) override;
-    CallbackReturn on_activate(const rclcpp_lifecycle::State &previous_state) override;
-    CallbackReturn on_deactivate(const rclcpp_lifecycle::State &previous_state) override;
-    CallbackReturn on_cleanup(const rclcpp_lifecycle::State &previous_state) override;
+    CallbackReturn
+    on_configure(const rclcpp_lifecycle::State &previous_state) override;
+    CallbackReturn
+    on_activate(const rclcpp_lifecycle::State &previous_state) override;
+    CallbackReturn
+    on_deactivate(const rclcpp_lifecycle::State &previous_state) override;
+    CallbackReturn
+    on_cleanup(const rclcpp_lifecycle::State &previous_state) override;
 
   protected:
     std::string mpCameraTopicName;
     std::string mpCalibrationFilePath;
     std::string mpConfigurationFilePath;
+    eSLAMType mpSLAMType;
 
   private:
     Frame mpCurrentFrame;
@@ -33,5 +38,9 @@ class BasaltSLAMNode : public SlamNode {
 
     void Update();
     void GrabImage(const ImageMsg::SharedPtr msg);
+    void GrabIMU(const ImuMsg::SharedPtr msg);
     void PublishFrame();
+
+    std::mutex mpMtxImuMsgs;
+    std::vector<std::shared_ptr<Imu>> mpImuMsgs;
 };

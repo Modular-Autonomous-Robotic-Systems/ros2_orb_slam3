@@ -15,6 +15,9 @@ class BasaltSLAM : public Slam {
     bool InitialiseSlam(std::string calibrationFilePath,
                         std::string setupCameraType);
     void TrackMonocular(Frame &frame, Sophus::SE3f &tcw) override;
+    void TrackMonocularIMU(Frame &frame,
+                           std::vector<std::shared_ptr<Imu>> &imuVec,
+                           Sophus::SE3f &tcw) override;
     cv::Mat GetCurrentFrame() override;
     void Shutdown() override;
     int GetTrackingState() override;
