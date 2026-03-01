@@ -38,24 +38,9 @@ void BasaltSLAM::TrackMonocular(Frame &frame, Sophus::SE3f &tcw) {
     mpController->TrackMonocular(input, tcw);
 }
 
-void BasaltSLAM::TrackMonocularIMU(Frame &frame,
-                                   std::vector<std::shared_ptr<Imu>> &imuVec,
-                                   Sophus::SE3f &tcw) {
-    std::vector<basalt::ImuData<double>::Ptr> imuData;
-    for (std::vector<std::shared_ptr<Imu>>::iterator it = imuVec.begin();
-         it != imuVec.end(); it++) {
-        // TODO add time filters here.
-        imuData.push_back((*it)->toBasaltImuData());
-    }
-    cv::Mat img = frame.getImage();
-    basalt::ManagedImage<uint16_t>::Ptr image = basalt::readOpenCVImage(img);
-    std::vector<basalt::ImageData> data;
-    data.push_back(basalt::ImageData());
-    data[0].img = image;
-    basalt::OpticalFlowInput::Ptr input;
-    input->t_ns = frame.getTimestampNSec();
-    input->img_data = data;
-    mpController->TrackMonocular(input, tcw);
+void BasaltSLAM::GrabIMU(std::shared_ptr<Imu> &data) {
+    const basalt::ImuData<double>::Ptr imuData = data->toBasaltImuData();
+    mpController->GrabIMU(imuData);
 }
 
 cv::Mat BasaltSLAM::GetCurrentFrame() {

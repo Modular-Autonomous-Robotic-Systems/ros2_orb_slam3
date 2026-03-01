@@ -40,7 +40,4 @@ class BasaltSLAMNode : public SlamNode {
     void GrabImage(const ImageMsg::SharedPtr msg);
     void GrabIMU(const ImuMsg::SharedPtr msg);
     void PublishFrame();
-
-    std::mutex mpMtxImuMsgs;
-    std::vector<std::shared_ptr<Imu>> mpImuMsgs;
 };

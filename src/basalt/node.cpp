@@ -124,12 +124,7 @@ void BasaltSLAMNode::GrabImage(const ImageMsg::SharedPtr msg) {
     Sophus::SE3f tcw;
 
     if (!img.empty()) {
-        if (mpSLAMType == eSLAMType::VSLAM) {
-            mpSlam->TrackMonocular(mpCurrentFrame, tcw);
-        } else if (mpSLAMType == eSLAMType::VISLAM) {
-            // TODO implement call to TrackMonocularIMU implemented here
-            mpSlam->TrackMonocularIMU(mpCurrentFrame, mpImuMsgs, tcw);
-        }
+        mpSlam->TrackMonocular(mpCurrentFrame, tcw);
         mpTwc = tcw.inverse();
         Update();
     }
@@ -137,9 +132,13 @@ void BasaltSLAMNode::GrabImage(const ImageMsg::SharedPtr msg) {
 
 void BasaltSLAMNode::GrabIMU(const ImuMsg::SharedPtr msg) {
     RCLCPP_DEBUG(this->get_logger(), "received IMU msg");
-    std::shared_ptr<Imu> imuPtr = std::make_shared<Imu>(msg);
-    std::unique_lock<std::mutex> lock(mpMtxImuMsgs);
-    mpImuMsgs.push_back(imuPtr);
+    if (mpSLAMType == eSLAMType::VISLAM) {
+        std::shared_ptr<Imu> imuPtr = std::make_shared<Imu>(msg);
+        mpSlam->GrabIMU(imuPtr);
+    } else {
+        RCLCPP_DEBUG(this->get_logger(),
+                     "dropping IMU data as it is not needed");
+    }
 }
 
 void BasaltSLAMNode::PublishFrame() {

@@ -80,8 +80,8 @@ class Imu : public Data {
     Eigen::Matrix3d
     convertCovarianceArray(const std::array<double, 9> &cov_array) const;
 
-    basalt::ImuData<double>::Ptr toBasaltImuData() const {
-        basalt::ImuData<double>::Ptr data(new basalt::ImuData<double>);
+    const basalt::ImuData<double>::Ptr toBasaltImuData() const {
+        const basalt::ImuData<double>::Ptr data(new basalt::ImuData<double>);
         data->t_ns = getTimestampNSec();
         data->accel = mpLinearAcceleration;
         data->gyro = mpAngularVelocity;
