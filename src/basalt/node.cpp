@@ -89,7 +89,7 @@ void BasaltSLAMNode::GrabImage(const ImageMsg::SharedPtr msg) {
     int sec = msg->header.stamp.sec;
     int nsec = msg->header.stamp.nanosec;
     long timestamp = sec * 1e9 + nsec;
-   RCLCPP_INFO(this->get_logger(), "GrabImage called: %ld", timestamp); 
+   RCLCPP_DEBUG(this->get_logger(), "GrabImage called: %ld", timestamp); 
     mpCurrentFrame = Frame(std::make_shared<cv::Mat>(m_cvImPtr->image), timestamp);
     cv::Mat img = mpCurrentFrame.getImage();
     Sophus::SE3f tcw;
