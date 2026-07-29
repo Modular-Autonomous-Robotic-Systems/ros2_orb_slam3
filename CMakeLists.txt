@@ -153,6 +153,11 @@ if(SLAM_TYPE STREQUAL "ORBSLAM3")
     ${THIS_PACKAGE_INCLUDE_DEPENDS}
   )
 elseif(SLAM_TYPE STREQUAL "BASALT")
+  # This is set to ensure that -march differences do not lead to object layout
+  # differences for Eigen. Explcitly setting EIGEN_MAX_ALIGN_BYTES and -march
+  # is defensive programming here
+  add_compile_definitions(EIGEN_MAX_ALIGN_BYTES=16 NRT_EIGEN_ABI_PIN=16)
+
   add_subdirectory(ext/basalt)
 
   add_executable(basalt_slam_node

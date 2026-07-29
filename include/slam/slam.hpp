@@ -2,9 +2,8 @@
 #define SLAM_OBJECT_HPP
 
 // ORBSLAM3 Dependencies
-#include "custom_interfaces/srv/startup_slam.hpp"
-#include "rclcpp/rclcpp.hpp"
-#include "std_srvs/srv/trigger.hpp"
+#include <yaml-cpp/yaml.h>
+
 #include <exception>
 #include <filesystem>
 #include <memory>
@@ -12,7 +11,10 @@
 #include <sophus/se3.hpp>
 #include <string>
 #include <thread>
-#include <yaml-cpp/yaml.h>
+
+#include "custom_interfaces/srv/startup_slam.hpp"
+#include "rclcpp/rclcpp.hpp"
+#include "std_srvs/srv/trigger.hpp"
 #ifdef USE_ORBSLAM3
 #include "MapPoint.h"
 #endif
@@ -20,12 +22,24 @@
 #include "MORB_SLAM/MapPoint.h"
 #endif
 
+#include <Eigen/Core>
+#include <Eigen/Geometry>
+
 #include "custom_interfaces/msg/point_cloud3.hpp"
 #include "sensor_msgs/msg/image.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
 #include "visualization_msgs/msg/marker.hpp"
-#include <Eigen/Core>
-#include <Eigen/Geometry>
+
+// ABI guard, parent (slam package) side. See src/slam/context/SIMD.md and
+// CMakeLists.txt's add_compile_definitions(). If the pin is removed or a
+// subproject reintroduces a differing -march, this fires at compile time
+// instead of corrupting the heap at runtime.
+#ifdef NRT_EIGEN_ABI_PIN
+static_assert(EIGEN_MAX_ALIGN_BYTES == NRT_EIGEN_ABI_PIN,
+              "EIGEN_MAX_ALIGN_BYTES disagrees with the pin set in "
+              "slam/CMakeLists.txt - see ros_ws/src/slam/context/SIMD.md");
+#endif
+
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 
@@ -42,19 +56,19 @@ using PointMsg = geometry_msgs::msg::Point;
 using MapMsg = custom_interfaces::msg::PointCloud3;
 
 class Data {
-  public:
+public:
     Data() = default;
     Data(long timestamp) : mpTimestamp(timestamp) {}
     double getTimestampMSec() const { return mpTimestamp * 1e-6; }
     double getTimestampSec() const { return mpTimestamp * 1e-9; }
     long getTimestampNSec() const { return mpTimestamp; }
 
-  protected:
+protected:
     long mpTimestamp = 0;
 };
 
 class Imu : public Data {
-  public:
+public:
     Imu() = default;
     Imu(ImuMsg::SharedPtr msg);
 
@@ -77,8 +91,8 @@ class Imu : public Data {
         return mpOrientationCovariance;
     }
 
-    Eigen::Matrix3d
-    convertCovarianceArray(const std::array<double, 9> &cov_array) const;
+    Eigen::Matrix3d convertCovarianceArray(
+        const std::array<double, 9>& cov_array) const;
 
     const basalt::ImuData<double>::Ptr toBasaltImuData() const {
         const basalt::ImuData<double>::Ptr data(new basalt::ImuData<double>);
@@ -88,7 +102,7 @@ class Imu : public Data {
         return data;
     }
 
-  private:
+private:
     Eigen::Vector3d mpLinearAcceleration;
     Eigen::Vector3d mpAngularVelocity;
     Eigen::Quaterniond mpOrientation;
@@ -103,13 +117,13 @@ class Imu : public Data {
 };
 
 class Frame : public Data {
-  public:
+public:
     Frame() = default;
-    Frame(std::shared_ptr<cv::Mat> image, long &timestamp);
+    Frame(std::shared_ptr<cv::Mat> image, long& timestamp);
     cv::Mat getImage() { return *(mpImage.get()); }
     Sophus::SE3f getTransform() { return Tcw; }
 
-  private:
+private:
     // TODO not a good idea to have nested threadsafe. this must be used for a
     // collection of data always to be used in one thread at a time.
     std::shared_ptr<cv::Mat> mpImage;
@@ -121,13 +135,13 @@ enum class eSLAMAlgorithm { NOT_SET = -1, ORBSLAM3 = 0, BASALT = 1 };
 enum class eSLAMType { VSLAM = 0, VISLAM = 1 };
 
 class Slam {
-  public:
+public:
     Slam(rclcpp::Logger logger);
     virtual cv::Mat GetCurrentFrame() = 0;
-    virtual void TrackMonocular(Frame &frame, Sophus::SE3f &tcw) = 0;
-    virtual void TrackMonocularIMU(Frame &frame,
-                                   std::vector<std::shared_ptr<Imu>> &imuVec,
-                                   Sophus::SE3f &tcw) {
+    virtual void TrackMonocular(Frame& frame, Sophus::SE3f& tcw) = 0;
+    virtual void TrackMonocularIMU(Frame& frame,
+                                   std::vector<std::shared_ptr<Imu>>& imuVec,
+                                   Sophus::SE3f& tcw) {
         RCLCPP_ERROR(
             mpLogger,
             "TrackMonocularIMU not implmented for this SLAM algorithm");
@@ -135,13 +149,13 @@ class Slam {
     virtual void Shutdown() = 0;
 #ifdef USE_ORBSLAM3
     virtual void SetFrameMapPointUpdateCallback(
-        std::function<void(std::vector<ORB_SLAM3::MapPoint *> &,
-                           const Sophus::SE3<float> &)>
+        std::function<void(std::vector<ORB_SLAM3::MapPoint*>&,
+                           const Sophus::SE3<float>&)>
             callback) = 0;
 #endif
     rclcpp::Logger mpLogger;
 
-  private:
+private:
     // Getter Methods
     virtual int GetTrackingState() = 0;
 };
