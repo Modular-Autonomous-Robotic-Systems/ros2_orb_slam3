@@ -1,5 +1,6 @@
-import launch
 import launch_ros
+
+import launch
 
 
 def generate_launch_description():
@@ -60,6 +61,29 @@ def generate_launch_description():
         default_value=[imu_topic_default],
         description="IMU Topic name (required for VISLAM)",
     )
+
+    use_sim_time_default = "False"
+    use_sim_time_arg = launch.actions.DeclareLaunchArgument(
+        "use-sim-time",
+        default_value=[use_sim_time_default],
+        choices=["True", "False"],
+        description="Boolean, the only accepted values are True and False. Run the SLAM compute node on the simulator clock published on /clock, so that the stamps it produces on ~/annotated_frame and on its pose output share a domain with the stamps it consumes.",
+    )
+    use_sim_time = launch.substitutions.LaunchConfiguration(
+        "use-sim-time", default=use_sim_time_default
+    )
+
+    use_visualisation_default = "False"
+    use_visualisation_arg = launch.actions.DeclareLaunchArgument(
+        "use-visualisation",
+        default_value=[use_visualisation_default],
+        choices=["True", "False"],
+        description="Boolean, the only accepted values are True and False. Open the Basalt Pangolin window and render the live VIO trajectory, image grid, sliding-window landmarks and local map alongside tracking. Requires a reachable X display, so leave it False for headless runs.",
+    )
+    use_visualisation = launch.substitutions.LaunchConfiguration(
+        "use-visualisation", default=use_visualisation_default
+    )
+
     basalt_slam_node = launch_ros.actions.Node(
         package="slam",
         executable="basalt_slam_node",
@@ -68,6 +92,7 @@ def generate_launch_description():
         namespace="/",
         respawn=False,
         arguments=["--ros-args", "--log-level", logger],
+        prefix='gdb -ex "set confirm off" -ex run -ex bt -ex q --args',
         parameters=[
             {
                 "camera_topic_name": camera_topic,
@@ -75,6 +100,8 @@ def generate_launch_description():
                 "configuration_file_path": configuration_file_path,
                 "slam_type": slam_type,
                 "imu_topic_name": imu_topic,
+                "use_sim_time": use_sim_time,
+                "use_visualisation": use_visualisation,
             }
         ],
     )
@@ -86,6 +113,8 @@ def generate_launch_description():
         configuration_file_path_arg,
         slam_type_arg,
         imu_topic_arg,
+        use_sim_time_arg,
+        use_visualisation_arg,
         basalt_slam_node,
     ]
 

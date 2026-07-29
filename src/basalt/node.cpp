@@ -1,4 +1,5 @@
 #include "slam/basalt/node.hpp"
+
 #include "slam/slam.hpp"
 
 BasaltSLAMNode::BasaltSLAMNode() : SlamNode("basalt_slam_node") {
@@ -33,6 +34,15 @@ BasaltSLAMNode::BasaltSLAMNode() : SlamNode("basalt_slam_node") {
     imu_topic_name_desc.type = 4;  // PARAMETER_STRING
     this->declare_parameter<std::string>("imu_topic_name", "",
                                          imu_topic_name_desc);
+
+    rcl_interfaces::msg::ParameterDescriptor use_visualisation_desc;
+    use_visualisation_desc.description =
+        "Boolean parameter used to determine if real time visualisation is to "
+        "be used here or not";
+    use_visualisation_desc.type = 1;  // PARAMETER_BOOL
+    this->declare_parameter<bool>("use_visualisation", false,
+                                  use_visualisation_desc);
+
     mpBasaltToROSTransform = Eigen::Matrix3d::Identity();
 }
 
@@ -42,13 +52,14 @@ BasaltSLAMNode::~BasaltSLAMNode() {
     }
 }
 
-CallbackReturn
-BasaltSLAMNode::on_configure(const rclcpp_lifecycle::State &previous_state) {
+CallbackReturn BasaltSLAMNode::on_configure(
+    const rclcpp_lifecycle::State& previous_state) {
     mpCameraTopicName = this->get_parameter("camera_topic_name").as_string();
     mpCalibrationFilePath =
         this->get_parameter("calibration_file_path").as_string();
     mpConfigurationFilePath =
         this->get_parameter("configuration_file_path").as_string();
+    mpUseVisualisation = this->get_parameter("use_visualisation").as_bool();
     std::string SLAMType = this->get_parameter("slam_type").as_string();
     if (SLAMType == "VSLAM") {
         mpSLAMType = eSLAMType::VSLAM;
@@ -78,8 +89,8 @@ BasaltSLAMNode::on_configure(const rclcpp_lifecycle::State &previous_state) {
     return CallbackReturn::SUCCESS;
 }
 
-CallbackReturn
-BasaltSLAMNode::on_activate(const rclcpp_lifecycle::State &previous_state) {
+CallbackReturn BasaltSLAMNode::on_activate(
+    const rclcpp_lifecycle::State& previous_state) {
     RCLCPP_INFO(this->get_logger(), "Creating SLAM Object in Basalt Slam Node");
 
     std::string setupCameraType;
@@ -90,7 +101,7 @@ BasaltSLAMNode::on_activate(const rclcpp_lifecycle::State &previous_state) {
     }
     mpSlam = std::make_unique<BasaltSLAM>(
         this->get_logger(), mpConfigurationFilePath, mpCalibrationFilePath,
-        setupCameraType);
+        setupCameraType, mpUseVisualisation);
 
     mpTfBroadcaster = std::make_unique<tf2_ros::TransformBroadcaster>(this);
 
@@ -114,7 +125,7 @@ BasaltSLAMNode::on_activate(const rclcpp_lifecycle::State &previous_state) {
     mpAnnotatedFramePublisher =
         this->create_publisher<ImageMsg>("~/annotated_frame", 10);
 
-    return CallbackReturn::SUCCESS;
+    return SlamNode::on_activate(previous_state);
 }
 
 CallbackReturn BasaltSLAMNode::on_deactivate(
@@ -137,7 +148,7 @@ CallbackReturn BasaltSLAMNode::on_deactivate(
     if (mpSlam) {
         mpSlam.reset();
     }
-    return CallbackReturn::SUCCESS;
+    return result;
 }
 
 CallbackReturn BasaltSLAMNode::on_cleanup(
@@ -176,7 +187,6 @@ void BasaltSLAMNode::GrabImage(const ImageMsg::SharedPtr msg) {
 }
 
 void BasaltSLAMNode::GrabIMU(const ImuMsg::SharedPtr msg) {
-    RCLCPP_DEBUG(this->get_logger(), "received IMU msg");
     if (mpSLAMType == eSLAMType::VISLAM) {
         std::shared_ptr<Imu> imuPtr = std::make_shared<Imu>(msg);
         RCLCPP_DEBUG(this->get_logger(),

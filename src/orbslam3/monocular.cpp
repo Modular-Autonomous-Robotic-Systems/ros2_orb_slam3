@@ -18,8 +18,8 @@ VisualSlamNode::VisualSlamNode() : SlamNode("orbslam3_mono_node") {
     mpOrbToROSTransform << 0, 0, 1, -1, 0, 0, 0, -1, 0;
 }
 
-CallbackReturn
-VisualSlamNode::on_configure(const rclcpp_lifecycle::State &previous_state) {
+CallbackReturn VisualSlamNode::on_configure(
+    const rclcpp_lifecycle::State& previous_state) {
     mpSettingsFilePath = this->get_parameter("settings_file_path").as_string();
     RCLCPP_INFO(this->get_logger(), "Settings File Path: %s",
                 mpSettingsFilePath.c_str());
@@ -32,8 +32,8 @@ VisualSlamNode::on_configure(const rclcpp_lifecycle::State &previous_state) {
     return CallbackReturn::SUCCESS;
 }
 
-CallbackReturn
-VisualSlamNode::on_activate(const rclcpp_lifecycle::State &previous_state) {
+CallbackReturn VisualSlamNode::on_activate(
+    const rclcpp_lifecycle::State& previous_state) {
     RCLCPP_INFO(this->get_logger(), "Creating SLAM Object in Mono Slam Node");
 #ifdef USE_ORBSLAM3
     RCLCPP_DEBUG(this->get_logger(), "Creating SLAM object");
@@ -47,10 +47,10 @@ VisualSlamNode::on_activate(const rclcpp_lifecycle::State &previous_state) {
     RCLCPP_DEBUG(this->get_logger(), "Created SLAM Object Successfully");
     RCLCPP_INFO(this->get_logger(),
                 "Created SLAM Object for ORBSLAM3 in Mono Slam Node");
-    std::function<void(std::vector<ORB_SLAM3::MapPoint *> &,
-                       const Sophus::SE3<float> &)>
-        cb = [this](std::vector<ORB_SLAM3::MapPoint *> &mapPoints,
-                    const Sophus::SE3<float> &tcw) {
+    std::function<void(std::vector<ORB_SLAM3::MapPoint*>&,
+                       const Sophus::SE3<float>&)>
+        cb = [this](std::vector<ORB_SLAM3::MapPoint*>& mapPoints,
+                    const Sophus::SE3<float>& tcw) {
             PublishMapPointsCallback(mapPoints, tcw);
         };
     mpSlam->SetFrameMapPointUpdateCallback(cb);
@@ -84,11 +84,13 @@ VisualSlamNode::on_activate(const rclcpp_lifecycle::State &previous_state) {
     // mpMapPublisher = this->create_publisher<MarkerMsg>("~/slam_map");
 
     RCLCPP_INFO(this->get_logger(), "ORBSLAM3 initialisation complete");
-    return CallbackReturn::SUCCESS;
+    return SlamNode::on_activate(previous_state);
 }
 
-CallbackReturn
-VisualSlamNode::on_deactivate(const rclcpp_lifecycle::State &previous_state) {
+CallbackReturn VisualSlamNode::on_deactivate(
+    const rclcpp_lifecycle::State& previous_state) {
+    CallbackReturn result = SlamNode::on_deactivate(previous_state);
+
     if (mpMapPointPublisher) {
         mpMapPointPublisher.reset();
     }
@@ -105,11 +107,11 @@ VisualSlamNode::on_deactivate(const rclcpp_lifecycle::State &previous_state) {
         mpSlam->Shutdown();
         mpSlam.reset();
     }
-    return CallbackReturn::SUCCESS;
+    return result;
 }
 
-CallbackReturn
-VisualSlamNode::on_cleanup(const rclcpp_lifecycle::State &previous_state) {
+CallbackReturn VisualSlamNode::on_cleanup(
+    const rclcpp_lifecycle::State& previous_state) {
     return CallbackReturn::SUCCESS;
 }
 
@@ -129,7 +131,7 @@ void VisualSlamNode::GrabImage(const ImageMsg::SharedPtr msg) {
     // Copy the ros image message to cv::Mat.
     try {
         m_cvImPtr = cv_bridge::toCvCopy(msg);
-    } catch (cv_bridge::Exception &e) {
+    } catch (cv_bridge::Exception& e) {
         RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
         return;
     }
@@ -168,7 +170,6 @@ void VisualSlamNode::GrabImage(const ImageMsg::SharedPtr msg) {
 }
 
 void VisualSlamNode::PublishFrame() {
-
     cv::Mat drawnFrame = mpSlam->GetCurrentFrame();
     // cv::Mat im = DrawFrame();
 
@@ -194,8 +195,8 @@ void VisualSlamNode::PublishFrame() {
 
 #ifdef USE_ORBSLAM3
 void VisualSlamNode::PublishMapPointsCallback(
-    std::vector<ORB_SLAM3::MapPoint *> &mapPoints,
-    const Sophus::SE3<float> &tcw) {
+    std::vector<ORB_SLAM3::MapPoint*>& mapPoints,
+    const Sophus::SE3<float>& tcw) {
     if (mapPoints.size() == 0) {
         RCLCPP_ERROR(this->get_logger(), "No Map Points to add to octomap");
         return;
@@ -210,11 +211,11 @@ void VisualSlamNode::PublishMapPointsCallback(
 }
 
 void VisualSlamNode::MapPointsToPointCloud(
-    std::vector<ORB_SLAM3::MapPoint *> &mapPoints,
-    const Sophus::SE3<float> &tcw, sensor_msgs::msg::PointCloud2 &cloud) {
+    std::vector<ORB_SLAM3::MapPoint*>& mapPoints, const Sophus::SE3<float>& tcw,
+    sensor_msgs::msg::PointCloud2& cloud) {
     // sensor_msgs::PointCloud2 cloud;
 
-    const int num_channels = 3; // x y z
+    const int num_channels = 3;  // x y z
     long current_frame_time_ = mpCurrentFrame.getTimestampNSec();
     Eigen::Matrix3d cam_base_R_ =
         mpOrbToROSTransform * Eigen::Matrix3d::Identity();
@@ -242,13 +243,12 @@ void VisualSlamNode::MapPointsToPointCloud(
 
     cloud.data.resize(cloud.row_step * cloud.height);
 
-    unsigned char *cloud_data_ptr = &(cloud.data[0]);
+    unsigned char* cloud_data_ptr = &(cloud.data[0]);
 
     float data_array[num_channels];
     int relevant_map_points = 0;
     for (unsigned int i = 0; i < cloud.width; i++) {
-        if (!mapPoints[i])
-            continue;
+        if (!mapPoints[i]) continue;
 
         if (mapPoints.at(i)->nObs >= mpNumMinObsPerPoint) {
             Eigen::Vector3f map_pt_f = mapPoints.at(i)->GetWorldPos();
@@ -274,7 +274,7 @@ void VisualSlamNode::MapPointsToPointCloud(
 }
 
 void VisualSlamNode::SophusToGeometryMsgTransform(
-    const Sophus::SE3<float> &se3, geometry_msgs::msg::Transform &pose) {
+    const Sophus::SE3<float>& se3, geometry_msgs::msg::Transform& pose) {
     // Extract translation
     pose.translation.x = se3.translation().x();
     pose.translation.y = se3.translation().y();

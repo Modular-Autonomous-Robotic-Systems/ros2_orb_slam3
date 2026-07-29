@@ -174,6 +174,7 @@ elseif(SLAM_TYPE STREQUAL "BASALT")
 
   target_link_libraries(basalt_slam_node
     PUBLIC basalt
+    PUBLIC basalt_visualisation
     PUBLIC ${YAMLCPP_LIBRARY}
     PUBLIC yaml-cpp
   )
