@@ -51,6 +51,15 @@ def generate_launch_description():
         description="Type of SLAM to configure and activate. This node supports VSLAM and VISLAM",
     )
 
+    imu_topic_default = ""
+    imu_topic = launch.substitutions.LaunchConfiguration(
+        "imu-topic", default=imu_topic_default
+    )
+    imu_topic_arg = launch.actions.DeclareLaunchArgument(
+        "imu-topic",
+        default_value=[imu_topic_default],
+        description="IMU Topic name (required for VISLAM)",
+    )
     basalt_slam_node = launch_ros.actions.Node(
         package="slam",
         executable="basalt_slam_node",
@@ -65,6 +74,7 @@ def generate_launch_description():
                 "calibration_file_path": calibration_file_path,
                 "configuration_file_path": configuration_file_path,
                 "slam_type": slam_type,
+                "imu_topic_name": imu_topic,
             }
         ],
     )
@@ -75,6 +85,7 @@ def generate_launch_description():
         calibration_file_path_arg,
         configuration_file_path_arg,
         slam_type_arg,
+        imu_topic_arg,
         basalt_slam_node,
     ]
 
