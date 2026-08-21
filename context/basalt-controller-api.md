@@ -81,8 +81,8 @@ The intermediate string buys nothing and is what let the two ends drift apart hi
 
 | Subscription | Publisher offers | Must request |
 |---|---|---|
-| camera (`node.cpp:100-102`) | `image_transport::advertise(topic, 1)` from `airsim_ros_wrapper.cpp:265` ⇒ VOLATILE, RELIABLE, KEEP_LAST(1) | a bare depth is fine (RELIABLE ≥ RELIABLE) |
-| IMU (`node.cpp:105-107`) | AP_DDS ⇒ VOLATILE, **BEST_EFFORT**, KEEP_LAST(5) | **`rclcpp::SensorDataQoS()`** — a bare depth requests RELIABLE and will **never match**, so `GrabIMU` is never called and VIO silently runs with no IMU |
+| camera (`node.cpp:108-110`) | Project AirSim's live `projectairsim_ros2_cpp_node` bridge offers VOLATILE, **BEST_EFFORT** (confirmed via `ros2 topic info -v`), not RELIABLE as previously recorded. A bare-depth (RELIABLE) subscriber does **not** match this, and did not — this is the same class of silent-no-callback bug as the IMU row below, now fixed. | **`rclcpp::SensorDataQoS()`** — matches BEST_EFFORT; a bare depth requests RELIABLE and will **never match** a BEST_EFFORT publisher |
+| IMU (`node.cpp:120-122`) | AP_DDS ⇒ VOLATILE, **BEST_EFFORT**, KEEP_LAST(5) | **`rclcpp::SensorDataQoS()`** — a bare depth requests RELIABLE and will **never match**, so `GrabIMU` is never called and VIO silently runs with no IMU |
 
 Full matrix and the DDS matching rule: [`/ws/ros_ws/context/ros-qos-compatibility.md`](../../../context/ros-qos-compatibility.md); publisher-side table: [`/ws/context/ardupilot-dds-qos.md`](../../../../context/ardupilot-dds-qos.md).
 

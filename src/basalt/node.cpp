@@ -105,8 +105,15 @@ CallbackReturn BasaltSLAMNode::on_activate(
 
     mpTfBroadcaster = std::make_unique<tf2_ros::TransformBroadcaster>(this);
 
+    // Project AirSim's ROS 2 bridge publishes camera frames BEST_EFFORT /
+    // VOLATILE (see ros2 topic info -v output in
+    // ros_ws/context/ros-qos-compatibility.md). A RELIABLE subscriber --
+    // which is what a bare depth means -- will not match it, so the
+    // callback would never fire. rclcpp::SensorDataQoS() requests
+    // BEST_EFFORT / VOLATILE / KEEP_LAST(5), matching the publisher and
+    // the ROS 2 convention for sensor streams.
     mpFrameSubscriber = this->create_subscription<ImageMsg>(
-        mpCameraTopicName, 10,
+        mpCameraTopicName, rclcpp::SensorDataQoS(),
         std::bind(&BasaltSLAMNode::GrabImage, this, std::placeholders::_1));
 
     if (mpSLAMType == eSLAMType::VISLAM) {
@@ -163,7 +170,8 @@ void BasaltSLAMNode::Update() {
 
 void BasaltSLAMNode::GrabImage(const ImageMsg::SharedPtr msg) {
     try {
-        m_cvImPtr = cv_bridge::toCvCopy(msg);
+        m_cvImPtr =
+            cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::MONO8);
     } catch (cv_bridge::Exception& e) {
         RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
         return;
