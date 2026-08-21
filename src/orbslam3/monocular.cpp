@@ -75,8 +75,11 @@ CallbackReturn VisualSlamNode::on_activate(
         "Creating Frame Subscription for topic: %s perform to visual odometry",
         mpCameraTopicName.c_str());
 
+    // Match the AirSim ROS 2 bridge's BEST_EFFORT / VOLATILE camera QoS --
+    // see ros_ws/context/ros-qos-compatibility.md -- and the Basalt node's
+    // equivalent subscription in src/basalt/node.cpp.
     mpFrameSubscriber = this->create_subscription<ImageMsg>(
-        mpCameraTopicName, 10,
+        mpCameraTopicName, rclcpp::SensorDataQoS(),
         std::bind(&VisualSlamNode::GrabImage, this, std::placeholders::_1));
     mpAnnotatedFramePublisher =
         this->create_publisher<ImageMsg>("~/annotated_frame", 10);
