@@ -138,13 +138,14 @@ class Slam {
 public:
     Slam(rclcpp::Logger logger);
     virtual cv::Mat GetCurrentFrame() = 0;
-    virtual void TrackMonocular(Frame& frame, Sophus::SE3f& tcw) = 0;
-    virtual void TrackMonocularIMU(Frame& frame,
+    virtual bool TrackMonocular(Frame& frame, Sophus::SE3f& tcw) = 0;
+    virtual bool TrackMonocularIMU(Frame& frame,
                                    std::vector<std::shared_ptr<Imu>>& imuVec,
                                    Sophus::SE3f& tcw) {
         RCLCPP_ERROR(
             mpLogger,
             "TrackMonocularIMU not implmented for this SLAM algorithm");
+        return false;
     }
     virtual void Shutdown() = 0;
 #ifdef USE_ORBSLAM3

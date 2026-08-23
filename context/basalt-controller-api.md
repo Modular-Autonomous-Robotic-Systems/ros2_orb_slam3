@@ -28,8 +28,8 @@ public:
 
     void GrabIMU(basalt::ImuData<double>::Ptr data);                          // :46
 
-    void TrackMonocular(OpticalFlowInput::Ptr& frame, Sophus::SE3f& tcw,
-                        std::optional<Sophus::SE3d> gtcw = std::nullopt);     // :56-57
+    bool TrackMonocular(OpticalFlowInput::Ptr& frame, Sophus::SE3f& tcw,
+                        std::optional<Sophus::SE3d> gtcw = std::nullopt);     // :54-55
 
     basalt::Calibration<double>& GetCalibration();                            // :62
 
@@ -42,8 +42,11 @@ public:
 Notes that matter at the call sites:
 
 - **`TrackMonocular` takes a non-const lvalue reference** to the `Ptr`. The argument must be a named variable, not a temporary.
+- **`BasaltSLAM::TrackMonocular` forwards this flag verbatim.** The wrapper at `src/basalt/slam.cpp:93-105` returns whatever `Controller::TrackMonocular` returned, and `BasaltSLAMNode::GrabImage` (`src/basalt/node.cpp:211-214`) inverts `tcw` and calls `Update()` only when it is `true`. As of 2026-08-23 the whole `Slam` interface carries this contract, `Slam::TrackMonocular` and `Slam::TrackMonocularIMU` in `include/slam/slam.hpp:141-148` both being declared `bool`, so a dropped frame is now expressible by every backend rather than only by basalt. See [`../ARCHITECTURE.md`](../ARCHITECTURE.md) for the interface level statement.
+- **`TrackMonocular` may leave `tcw` untouched.** As of 2026-08-23 it checks the state returned by `ProcessFrame` before writing `tcw`, because `ProcessFrame` returns null on a dropped frame. `TrackMonocular` now returns a boolean flag which the callers must handle appropriately. Previously the return was dereferenced unconditionally, which was a latent segmentation fault on the paths where `ProcessFrame` already returned null.
 - **`GetCalibration()` returns a mutable reference** to the controller's `Calibration<double> calib_` member, which is held **by value** (`controller.h:71`). That by-value member is the type whose layout diverges under mismatched `-march` — see [`build-and-abi.md`](build-and-abi.md).
 - The seven-argument `initialize` overload is the one used; the trailing `enableVisualisation` flag is the single source of truth for whether the GUI is required.
+- **`useProducerConsumerArchitecture` is passed `false`** (`src/basalt/slam.cpp:48-55`), which selects the event-driven execution model. No basalt stage then owns a thread except the local mapper, and `TrackMonocular` runs optical flow and the entire VIO backend inline on the calling thread. This makes the caller's threading model load-bearing for correctness rather than merely for latency, and it has produced two deadlocks. See [basalt-threading-and-queues.md](basalt-threading-and-queues.md) before changing how the node's callbacks are scheduled.
 
 ## `OpticalFlowInput` — a plain aggregate
 
@@ -85,6 +88,8 @@ The intermediate string buys nothing and is what let the two ends drift apart hi
 | IMU (`node.cpp:120-122`) | AP_DDS ⇒ VOLATILE, **BEST_EFFORT**, KEEP_LAST(5) | **`rclcpp::SensorDataQoS()`** — a bare depth requests RELIABLE and will **never match**, so `GrabIMU` is never called and VIO silently runs with no IMU |
 
 Full matrix and the DDS matching rule: [`/ws/ros_ws/context/ros-qos-compatibility.md`](../../../context/ros-qos-compatibility.md); publisher-side table: [`/ws/context/ardupilot-dds-qos.md`](../../../../context/ardupilot-dds-qos.md).
+
+Each subscription now carries its own mutually exclusive callback group through `rclcpp::SubscriptionOptions`, created in the `BasaltSLAMNode` constructor, and the driver runs a `MultiThreadedExecutor`. Any edit to these two `create_subscription` calls must preserve both the `SensorDataQoS` above and the separate callback groups. Corrected 2026-08-23. Both subscriptions previously omitted a callback group and landed in the node's default mutually exclusive group, which under `rclcpp::spin` serialised `GrabImage` and `GrabIMU` onto one thread and was the precondition for the inertial self-wait deadlock in [basalt-threading-and-queues.md](basalt-threading-and-queues.md).
 
 ## Other cross-boundary types
 
