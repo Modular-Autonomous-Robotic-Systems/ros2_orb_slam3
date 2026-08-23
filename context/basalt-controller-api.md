@@ -28,8 +28,8 @@ public:
 
     void GrabIMU(basalt::ImuData<double>::Ptr data);                          // :46
 
-    void TrackMonocular(OpticalFlowInput::Ptr& frame, Sophus::SE3f& tcw,
-                        std::optional<Sophus::SE3d> gtcw = std::nullopt);     // :56-57
+    bool TrackMonocular(OpticalFlowInput::Ptr& frame, Sophus::SE3f& tcw,
+                        std::optional<Sophus::SE3d> gtcw = std::nullopt);     // :54-55
 
     basalt::Calibration<double>& GetCalibration();                            // :62
 
@@ -42,6 +42,7 @@ public:
 Notes that matter at the call sites:
 
 - **`TrackMonocular` takes a non-const lvalue reference** to the `Ptr`. The argument must be a named variable, not a temporary.
+- **`BasaltSLAM::TrackMonocular` forwards this flag verbatim.** The wrapper at `src/basalt/slam.cpp:93-105` returns whatever `Controller::TrackMonocular` returned, and `BasaltSLAMNode::GrabImage` (`src/basalt/node.cpp:211-214`) inverts `tcw` and calls `Update()` only when it is `true`. As of 2026-08-23 the whole `Slam` interface carries this contract, `Slam::TrackMonocular` and `Slam::TrackMonocularIMU` in `include/slam/slam.hpp:141-148` both being declared `bool`, so a dropped frame is now expressible by every backend rather than only by basalt. See [`../ARCHITECTURE.md`](../ARCHITECTURE.md) for the interface level statement.
 - **`TrackMonocular` may leave `tcw` untouched.** As of 2026-08-23 it checks the state returned by `ProcessFrame` before writing `tcw`, because `ProcessFrame` returns null on a dropped frame. `TrackMonocular` now returns a boolean flag which the callers must handle appropriately. Previously the return was dereferenced unconditionally, which was a latent segmentation fault on the paths where `ProcessFrame` already returned null.
 - **`GetCalibration()` returns a mutable reference** to the controller's `Calibration<double> calib_` member, which is held **by value** (`controller.h:71`). That by-value member is the type whose layout diverges under mismatched `-march` — see [`build-and-abi.md`](build-and-abi.md).
 - The seven-argument `initialize` overload is the one used; the trailing `enableVisualisation` flag is the single source of truth for whether the GUI is required.

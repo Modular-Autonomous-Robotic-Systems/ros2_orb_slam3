@@ -29,7 +29,7 @@ The architecture consists of three main layers:
         *   Instantiating the concrete SLAM backend (e.g., `MonoORBSLAM3`) based on configuration.
         *   Publishing visualization data (annotated frames, map points).
     *   **Key Methods**:
-        *   `void GrabImage(const sensor_msgs::msg::Image::SharedPtr msg)`: Callback for new images. Converts ROS image to `Frame` and calls `mpSlam->TrackMonocular`.
+        *   `void GrabImage(const sensor_msgs::msg::Image::SharedPtr msg)`: Callback for new images. Converts ROS image to `Frame` and calls `mpSlam->TrackMonocular`, whose boolean return states whether a pose was produced for this frame and therefore whether `tcw` may be read.
         *   `void PublishFrame()`: Publishes the debug image with tracked features.
         *   `void PublishMapPointsCallback(std::vector<ORB_SLAM3::MapPoint*> &mapPoints, const Sophus::SE3<float> &tcw)`: Callback from the SLAM engine to publish the sparse map.
 
@@ -42,7 +42,8 @@ This layer ensures that the actual SLAM algorithm is implemented independently o
     *   **Key Responsibilities**: Providing a uniform API for tracking and system control.
     *   **Key Methods**:
         *   `virtual cv::Mat GetCurrentFrame() = 0`: Returns the current frame, potentially with debug annotations.
-        *   `virtual void TrackMonocular(Frame &frame, Sophus::SE3f &tcw) = 0`: Processes a single frame. Returns the estimated World-to-Camera transform (`tcw`) via reference.
+        *   `virtual bool TrackMonocular(Frame &frame, Sophus::SE3f &tcw) = 0`: Processes a single frame, writing the estimated World-to-Camera transform into the `tcw` reference and returning `true` only when that transform was written. A backend that drops or fails to track a frame returns `false` and leaves `tcw` untouched, so a caller must test the return before consuming the pose. (Correction, 2026-08-23. This method previously returned `void`, which gave the caller no way to distinguish a tracked frame from a dropped one and left it consuming a stale or default `tcw`.)
+        *   `virtual bool TrackMonocularIMU(Frame &frame, std::vector<std::shared_ptr<Imu>> &imuVec, Sophus::SE3f &tcw)`: The visual inertial counterpart, carrying the same return contract. The base implementation logs an error for backends that do not implement it.
         *   `virtual void Shutdown() = 0`: Signal to the SLAM system to stop threads and save maps.
         *   `virtual void SetFrameMapPointUpdateCallback(std::function<void(std::vector<ORB_SLAM3::MapPoint*>&, const Sophus::SE3<float>&)> callback) = 0`: Sets a callback for receiving map point updates from the SLAM algorithm.
 
@@ -61,7 +62,7 @@ This layer ensures that the actual SLAM algorithm is implemented independently o
     *   **Description**: Concrete implementation of the `Slam` interface that wraps the `ORB_SLAM3::System`.
     *   **Key Responsibilities**: Translating `Frame` objects into `ORB_SLAM3` native calls and managing the ORB-SLAM3 system lifecycle.
     *   **Key Methods**:
-        *   `void TrackMonocular(Frame &frame, Sophus::SE3f &tcw) override`: Invokes `mpORBSlam3->TrackMonocular(frame.getImage(), frame.getTimestampSec())` to perform tracking.
+        *   `bool TrackMonocular(Frame &frame, Sophus::SE3f &tcw) override`: Invokes `mpORBSlam3->TrackMonocular(frame.getImage(), frame.getTimestampSec())` to perform tracking, and reports through its return whether a pose was obtained.
         *   `void SetFrameMapPointUpdateCallback(std::function<void(std::vector<ORB_SLAM3::MapPoint*>&, const Sophus::SE3<float>&)> callback) override`: Passes the callback to the underlying `ORB_SLAM3::System`.
 
 *   **`MonoMORBSLAM` (`include/slam/morbslam/monocular.hpp`)**:
@@ -96,14 +97,14 @@ The data flow describes the sequence of operations from receiving an image to pu
     *   Still within `VisualSlamNode::GrabImage`, the created `Frame` is passed to the abstract `Slam` interface's `TrackMonocular` method:
         *   `mpSlam->TrackMonocular(mpCurrentFrame, tcw)`
     *   This is a polymorphic call, which dispatches to the concrete implementation (e.g., `MonoORBSLAM3::TrackMonocular`):
-        *   `void MonoORBSLAM3::TrackMonocular(Frame &frame, Sophus::SE3f &tcw)`
+        *   `bool MonoORBSLAM3::TrackMonocular(Frame &frame, Sophus::SE3f &tcw)`
     *   Inside `MonoORBSLAM3::TrackMonocular`:
         *   The underlying ORB_SLAM3 system's tracking function is called:
             *   `mpORBSlam3->TrackMonocular(frame.getImage(), frame.getTimestampSec())`
         *   The estimated World-to-Camera transform (`tcw`) is returned by ORB_SLAM3 and stored in the `tcw` reference parameter.
 
 3.  **Output and Publication**:
-    *   After `mpSlam->TrackMonocular` returns, back in `VisualSlamNode::GrabImage`:
+    *   After `mpSlam->TrackMonocular` returns `true`, back in `VisualSlamNode::GrabImage`:
         *   The World-to-Camera transform (`tcw`) is inverted to obtain the Camera-to-World transform (`mpTwc = tcw.inverse()`).
         *   The `VisualSlamNode::Update()` method is invoked:
             *   `void VisualSlamNode::Update()`

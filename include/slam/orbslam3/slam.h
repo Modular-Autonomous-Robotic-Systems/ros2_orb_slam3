@@ -1,6 +1,8 @@
 #ifndef MONOCULAR_SLAM_NODE_HPP
 #define MONOCULAR_SLAM_NODE_HPP
 
+#include <cv_bridge/cv_bridge.h>
+
 #include <algorithm>
 #include <chrono>
 #include <fstream>
@@ -11,8 +13,6 @@
 #include "slam/node.hpp"
 #include "std_srvs/srv/trigger.hpp"
 #include "visualization_msgs/msg/marker.hpp"
-
-#include <cv_bridge/cv_bridge.h>
 // ORB_SLAM3 related includes
 #include "Frame.h"
 #include "Map.h"
@@ -21,7 +21,7 @@
 #include "Tracking.h"
 
 class MonoORBSLAM3 : public Slam {
-  public:
+public:
     MonoORBSLAM3(rclcpp::Logger logger, std::string settingsFilePath,
                  std::string vocabFilePath, std::string setupCameraType);
     ~MonoORBSLAM3() {
@@ -43,13 +43,13 @@ class MonoORBSLAM3 : public Slam {
             return cv::Mat();
         }
     };
-    void TrackMonocular(Frame &frame, Sophus::SE3f &tcw);
+    bool TrackMonocular(Frame& frame, Sophus::SE3f& tcw);
     void SetFrameMapPointUpdateCallback(
-        std::function<void(std::vector<ORB_SLAM3::MapPoint *> &,
-                           const Sophus::SE3<float> &)>
+        std::function<void(std::vector<ORB_SLAM3::MapPoint*>&,
+                           const Sophus::SE3<float>&)>
             callback);
 
-  private:
+private:
     // ORBSLAM3 Related pointers
     std::string mpVocabFilePath = "";
     std::string mpSettingsFilePath = "";

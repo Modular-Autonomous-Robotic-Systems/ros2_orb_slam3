@@ -13,7 +13,8 @@ using std::placeholders::_1;
 MonoORBSLAM3::MonoORBSLAM3(rclcpp::Logger logger, std::string settingsFilePath,
                            std::string vocabFilePath,
                            std::string setupCameraType)
-    : Slam(logger), mpSettingsFilePath(settingsFilePath),
+    : Slam(logger),
+      mpSettingsFilePath(settingsFilePath),
       mpVocabFilePath(vocabFilePath) {
     RCLCPP_INFO(mpLogger, "Creating ORBSLAM3 Object");
     RCLCPP_INFO(mpLogger, "Config File Path: ", settingsFilePath.c_str());
@@ -27,13 +28,14 @@ MonoORBSLAM3::MonoORBSLAM3(rclcpp::Logger logger, std::string settingsFilePath,
         vocabFilePath, settingsFilePath, mpCameraType, true);
 }
 
-void MonoORBSLAM3::TrackMonocular(Frame &frame, Sophus::SE3f &tcw) {
+bool MonoORBSLAM3::TrackMonocular(Frame& frame, Sophus::SE3f& tcw) {
     tcw = mpORBSlam3->TrackMonocular(frame.getImage(), frame.getTimestampSec());
+    return mpORBSlam3->GetTrackingState() == ORB_SLAM3::Tracking::OK;
 }
 
 void MonoORBSLAM3::SetFrameMapPointUpdateCallback(
-    std::function<void(std::vector<ORB_SLAM3::MapPoint *> &,
-                       const Sophus::SE3<float> &)>
+    std::function<void(std::vector<ORB_SLAM3::MapPoint*>&,
+                       const Sophus::SE3<float>&)>
         callback) {
     mpORBSlam3->SetFrameMapPointUpdateCallback(callback);
 }
