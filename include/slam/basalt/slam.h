@@ -19,7 +19,7 @@ public:
 
     bool InitialiseSlam(std::string calibrationFilePath,
                         std::string setupCameraType, bool useVisualisation);
-    void TrackMonocular(Frame& frame, Sophus::SE3f& tcw) override;
+    bool TrackMonocular(Frame& frame, Sophus::SE3f& tcw) override;
     cv::Mat GetCurrentFrame() override;
     void Shutdown() override;
     int GetTrackingState() override;

@@ -44,6 +44,14 @@ BasaltSLAMNode::BasaltSLAMNode() : SlamNode("basalt_slam_node") {
                                   use_visualisation_desc);
 
     mpBasaltToROSTransform = Eigen::Matrix3d::Identity();
+
+    // Created here rather than in on_activate: an executor collects a node's
+    // callback groups when the node is added, and does not reliably observe
+    // groups created later.
+    mpImageCallbackGroup = this->create_callback_group(
+        rclcpp::CallbackGroupType::MutuallyExclusive);
+    mpImuCallbackGroup = this->create_callback_group(
+        rclcpp::CallbackGroupType::MutuallyExclusive);
 }
 
 BasaltSLAMNode::~BasaltSLAMNode() {
@@ -106,15 +114,18 @@ CallbackReturn BasaltSLAMNode::on_activate(
     mpTfBroadcaster = std::make_unique<tf2_ros::TransformBroadcaster>(this);
 
     // Project AirSim's ROS 2 bridge publishes camera frames BEST_EFFORT /
-    // VOLATILE (see ros2 topic info -v output in
-    // ros_ws/context/ros-qos-compatibility.md). A RELIABLE subscriber --
+    // VOLATILE. A RELIABLE subscriber --
     // which is what a bare depth means -- will not match it, so the
     // callback would never fire. rclcpp::SensorDataQoS() requests
     // BEST_EFFORT / VOLATILE / KEEP_LAST(5), matching the publisher and
     // the ROS 2 convention for sensor streams.
+    rclcpp::SubscriptionOptions imageOptions;
+    imageOptions.callback_group = mpImageCallbackGroup;
+
     mpFrameSubscriber = this->create_subscription<ImageMsg>(
         mpCameraTopicName, rclcpp::SensorDataQoS(),
-        std::bind(&BasaltSLAMNode::GrabImage, this, std::placeholders::_1));
+        std::bind(&BasaltSLAMNode::GrabImage, this, std::placeholders::_1),
+        imageOptions);
 
     if (mpSLAMType == eSLAMType::VISLAM) {
         // /ap/imu/experimental/data is published BEST_EFFORT / VOLATILE /
@@ -123,10 +134,13 @@ CallbackReturn BasaltSLAMNode::on_activate(
         // callback would never fire and VIO would run with zero IMU data.
         // rclcpp::SensorDataQoS() is exactly BEST_EFFORT / VOLATILE /
         // KEEP_LAST(5) and is also the ROS 2 convention for sensor streams.
-        // See ros_ws/context/ros-qos-compatibility.md.
+        rclcpp::SubscriptionOptions imuOptions;
+        imuOptions.callback_group = mpImuCallbackGroup;
+
         mpIMUSubscriber = this->create_subscription<ImuMsg>(
             mpIMUTopicName, rclcpp::SensorDataQoS(),
-            std::bind(&BasaltSLAMNode::GrabIMU, this, std::placeholders::_1));
+            std::bind(&BasaltSLAMNode::GrabIMU, this, std::placeholders::_1),
+            imuOptions);
     }
 
     mpAnnotatedFramePublisher =
@@ -138,6 +152,9 @@ CallbackReturn BasaltSLAMNode::on_activate(
 CallbackReturn BasaltSLAMNode::on_deactivate(
     const rclcpp_lifecycle::State& previous_state) {
     CallbackReturn result = SlamNode::on_deactivate(previous_state);
+
+    std::unique_lock<std::shared_mutex> slamLock(mpMtxSlam);
+
     mpSlam->StopSlamVisualiser();
 
     if (mpAnnotatedFramePublisher) {
@@ -169,6 +186,9 @@ void BasaltSLAMNode::Update() {
 }
 
 void BasaltSLAMNode::GrabImage(const ImageMsg::SharedPtr msg) {
+    std::shared_lock<std::shared_mutex> slamLock(mpMtxSlam);
+    if (!mpSlam) return;
+
     try {
         m_cvImPtr =
             cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::MONO8);
@@ -188,13 +208,17 @@ void BasaltSLAMNode::GrabImage(const ImageMsg::SharedPtr msg) {
     Sophus::SE3f tcw;
 
     if (!img.empty()) {
-        mpSlam->TrackMonocular(mpCurrentFrame, tcw);
-        mpTwc = tcw.inverse();
-        Update();
+        if (mpSlam->TrackMonocular(mpCurrentFrame, tcw)) {
+            mpTwc = tcw.inverse();
+            Update();
+        };
     }
 }
 
 void BasaltSLAMNode::GrabIMU(const ImuMsg::SharedPtr msg) {
+    std::shared_lock<std::shared_mutex> slamLock(mpMtxSlam);
+    if (!mpSlam) return;
+
     if (mpSLAMType == eSLAMType::VISLAM) {
         std::shared_ptr<Imu> imuPtr = std::make_shared<Imu>(msg);
         RCLCPP_DEBUG(this->get_logger(),

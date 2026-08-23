@@ -90,7 +90,7 @@ void BasaltSLAM::StopSlamVisualiser() {
     }
 }
 
-void BasaltSLAM::TrackMonocular(Frame& frame, Sophus::SE3f& tcw) {
+bool BasaltSLAM::TrackMonocular(Frame& frame, Sophus::SE3f& tcw) {
     cv::Mat img = frame.getImage();
     basalt::ManagedImage<uint16_t>::Ptr image = basalt::readOpenCVImage(img);
     std::vector<basalt::ImageData> data;
@@ -100,7 +100,8 @@ void BasaltSLAM::TrackMonocular(Frame& frame, Sophus::SE3f& tcw) {
         std::make_shared<basalt::OpticalFlowInput>();
     input->t_ns = frame.getTimestampNSec();
     input->img_data = data;
-    mpController->TrackMonocular(input, tcw);
+    bool status = mpController->TrackMonocular(input, tcw);
+    return status;
 }
 
 void BasaltSLAM::GrabIMU(std::shared_ptr<Imu>& data) {

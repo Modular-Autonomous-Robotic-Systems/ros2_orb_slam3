@@ -4,6 +4,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
+#include <shared_mutex>
 
 #include "slam/basalt/slam.h"
 #include "slam/node.hpp"
@@ -36,6 +37,11 @@ private:
     Eigen::Matrix3d mpBasaltToROSTransform;
 
     cv_bridge::CvImagePtr m_cvImPtr;
+
+    rclcpp::CallbackGroup::SharedPtr mpImageCallbackGroup;
+    rclcpp::CallbackGroup::SharedPtr mpImuCallbackGroup;
+
+    std::shared_mutex mpMtxSlam;
 
     rclcpp::Subscription<ImageMsg>::SharedPtr mpFrameSubscriber;
     rclcpp::Subscription<ImuMsg>::SharedPtr mpIMUSubscriber;
